@@ -1,0 +1,310 @@
+{
+  "name": "CRM Automation - Lead Intake Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook - Recebe Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "lead-intake-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validação básica dos dados recebidos\nconst body = $input.first().json.body || $input.first().json;\n\nif (!body.name || !body.message) {\n  throw new Error('Campos obrigatórios ausentes: name e message');\n}\n\nreturn [{\n  json: {\n    name: String(body.name).trim(),\n    message: String(body.message).trim(),\n    timestamp: new Date().toISOString(),\n    source: body.source || 'webhook'\n  }\n}];"
+      },
+      "id": "validate-node",
+      "name": "Valida e Normaliza Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:3000/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-backend-node",
+      "name": "Envia para Backend (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data.intent }}",
+              "rightValue": "VENDAS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-vendas-node",
+      "name": "É VENDAS?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data.intent }}",
+              "rightValue": "SUPORTE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-suporte-node",
+      "name": "É SUPORTE?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 480]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID_VENDAS"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Vendas"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $('Envia para Backend (API)').item.json.data.id }}",
+            "Nome": "={{ $('Envia para Backend (API)').item.json.data.name }}",
+            "Mensagem": "={{ $('Envia para Backend (API)').item.json.data.message }}",
+            "Intenção": "={{ $('Envia para Backend (API)').item.json.data.intent }}",
+            "Data": "={{ $('Envia para Backend (API)').item.json.data.created_at }}"
+          }
+        }
+      },
+      "id": "sheets-vendas-node",
+      "name": "Google Sheets — Aba Vendas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID_SUPORTE"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Suporte"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $('Envia para Backend (API)').item.json.data.id }}",
+            "Nome": "={{ $('Envia para Backend (API)').item.json.data.name }}",
+            "Mensagem": "={{ $('Envia para Backend (API)').item.json.data.message }}",
+            "Intenção": "={{ $('Envia para Backend (API)').item.json.data.intent }}",
+            "Data": "={{ $('Envia para Backend (API)').item.json.data.created_at }}"
+          }
+        }
+      },
+      "id": "sheets-suporte-node",
+      "name": "Google Sheets — Aba Suporte",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1120, 440]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID_OUTROS"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Outros"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $('Envia para Backend (API)').item.json.data.id }}",
+            "Nome": "={{ $('Envia para Backend (API)').item.json.data.name }}",
+            "Mensagem": "={{ $('Envia para Backend (API)').item.json.data.message }}",
+            "Intenção": "={{ $('Envia para Backend (API)').item.json.data.intent }}",
+            "Data": "={{ $('Envia para Backend (API)').item.json.data.created_at }}"
+          }
+        }
+      },
+      "id": "sheets-outros-node",
+      "name": "Google Sheets — Aba Outros",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1120, 660]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"lead\": {{ JSON.stringify($('Envia para Backend (API)').item.json.data) }},\n  \"message\": \"Lead processado com sucesso pelo n8n\"\n}"
+      },
+      "id": "response-node",
+      "name": "Responde ao Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Recebe Lead": {
+      "main": [
+        [
+          {
+            "node": "Valida e Normaliza Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valida e Normaliza Dados": {
+      "main": [
+        [
+          {
+            "node": "Envia para Backend (API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia para Backend (API)": {
+      "main": [
+        [
+          {
+            "node": "É VENDAS?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "É SUPORTE?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É VENDAS?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets — Aba Vendas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde ao Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É SUPORTE?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets — Aba Suporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets — Aba Outros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets — Aba Vendas": {
+      "main": [[{ "node": "Responde ao Webhook", "type": "main", "index": 0 }]]
+    },
+    "Google Sheets — Aba Suporte": {
+      "main": [[{ "node": "Responde ao Webhook", "type": "main", "index": 0 }]]
+    },
+    "Google Sheets — Aba Outros": {
+      "main": [[{ "node": "Responde ao Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["crm", "automação", "lead"],
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 1
+}
