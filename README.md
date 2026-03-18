@@ -82,7 +82,7 @@ crm-automation/
 ### 1. Clone e configure o ambiente
 
 ```bash
-git clone https://github.com/seu-usuario/crm-automation.git
+git clone https://github.com/mrlptrcc/n8ncrm.git
 cd crm-automation
 
 # Cria seu .env a partir do template
