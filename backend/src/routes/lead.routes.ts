@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import {
   createLeadHandler,
-  listLeadsHandler,
   getLeadHandler,
+  listLeadsHandler,
 } from "../controllers/lead.controller";
 
 /**

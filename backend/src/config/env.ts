@@ -25,6 +25,10 @@ const envSchema = z.object({
   AI_PROVIDER: z.enum(["openai", "anthropic"]).default("openai"),
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+
+  // Segurança
+  API_KEY: z.string().min(1, "API_KEY é obrigatória"),
+  JWT_SECRET: z.string().min(16, "JWT_SECRET deve ter ao menos 16 caracteres"),
 });
 
 // Valida e parseia — lança erro detalhado em caso de falha

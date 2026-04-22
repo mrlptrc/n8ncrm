@@ -1,4 +1,4 @@
-import { buildApp } from "./app";
+import { buildApp } from "./app.bootstrap";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
 

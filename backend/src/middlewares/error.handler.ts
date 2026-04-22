@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyError } from "fastify";
 import { logger } from "../config/logger";
+import type { ApiResponse } from "../types";
 
 /**
  * Handler global de erros do Fastify.
@@ -30,7 +31,7 @@ export function registerErrorHandler(fastify: FastifyInstance): void {
         success: false,
         error: message,
         ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
-      });
+      } satisfies ApiResponse<null> & { stack?: string });
     }
   );
 

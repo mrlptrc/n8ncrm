@@ -61,3 +61,19 @@ export interface ClassificationResult {
   confidence: "high" | "medium" | "low";
   reasoning?: string;
 }
+
+export interface AuthTokenDTO {
+  apiKey: string;
+}
+
+export interface AuthTokenResponse {
+  token: string;
+  expiresIn: string;
+}
+
+export interface LeadStats {
+  total: number;
+  by_intent: Record<LeadIntent, number>;
+  last_7_days: number;
+  last_30_days: number;
+}

@@ -1,8 +1,13 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
-import { createLead, listLeads, getLeadById } from "../services/lead.service";
+import {
+  createLead,
+  getLeadById,
+  getLeadStats,
+  listLeads,
+} from "../services/lead.service";
 import { logger } from "../config/logger";
-import type { ApiResponse, Lead, ListLeadsQuery } from "../types";
+import type { ApiResponse, Lead, LeadStats, ListLeadsQuery } from "../types";
 
 // ─────────────────────────────────────────────
 // Schemas de validação com Zod
@@ -134,5 +139,26 @@ export async function getLeadHandler(
   } catch (err) {
     logger.error({ err, id }, "Erro interno em GET /leads/:id");
     reply.status(500).send({ success: false, error: "Erro interno" });
+  }
+}
+
+export async function getLeadStatsHandler(
+  _request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  try {
+    const stats = await getLeadStats();
+    const response: ApiResponse<LeadStats> = {
+      success: true,
+      data: stats,
+    };
+
+    reply.send(response);
+  } catch (err) {
+    logger.error({ err }, "Erro interno em GET /leads/stats");
+    reply.status(500).send({
+      success: false,
+      error: "Erro interno ao consultar estatísticas dos leads",
+    } satisfies ApiResponse<null>);
   }
 }

@@ -1,7 +1,13 @@
 import { getSupabaseClient } from "../config/supabase";
 import { logger } from "../config/logger";
-import { classifyIntent } from "./ai.service";
-import type { Lead, CreateLeadDTO, ListLeadsQuery } from "../types";
+import { classifyIntent } from "./ai-fallback.service";
+import type {
+  CreateLeadDTO,
+  Lead,
+  LeadIntent,
+  LeadStats,
+  ListLeadsQuery,
+} from "../types";
 
 const TABLE = "leads";
 
@@ -119,4 +125,63 @@ export async function getLeadById(id: string): Promise<Lead | null> {
   }
 
   return data as Lead;
+}
+
+/**
+ * Retorna estatísticas agregadas dos leads.
+ */
+export async function getLeadStats(): Promise<LeadStats> {
+  const supabase = getSupabaseClient();
+  const now = new Date();
+  const last7Days = new Date(now);
+  last7Days.setDate(now.getDate() - 7);
+  const last30Days = new Date(now);
+  last30Days.setDate(now.getDate() - 30);
+
+  const countQuery = async (filters?: {
+    intent?: LeadIntent;
+    createdAfter?: string;
+  }): Promise<number> => {
+    let query = supabase.from(TABLE).select("*", { count: "exact", head: true });
+
+    if (filters?.intent) {
+      query = query.eq("intent", filters.intent);
+    }
+
+    if (filters?.createdAfter) {
+      query = query.gte("created_at", filters.createdAfter);
+    }
+
+    const { count, error } = await query;
+
+    if (error) {
+      logger.error({ error, filters }, "Erro ao consultar estatísticas de leads");
+      throw new Error(`Falha ao consultar estatísticas: ${error.message}`);
+    }
+
+    return count ?? 0;
+  };
+
+  const [total, vendas, suporte, outros, last7, last30] = await Promise.all([
+    countQuery(),
+    countQuery({ intent: "VENDAS" }),
+    countQuery({ intent: "SUPORTE" }),
+    countQuery({ intent: "OUTROS" }),
+    countQuery({ createdAfter: last7Days.toISOString() }),
+    countQuery({ createdAfter: last30Days.toISOString() }),
+  ]);
+
+  const stats: LeadStats = {
+    total,
+    by_intent: {
+      VENDAS: vendas,
+      SUPORTE: suporte,
+      OUTROS: outros,
+    },
+    last_7_days: last7,
+    last_30_days: last30,
+  };
+
+  logger.info({ stats }, "Estatísticas de leads calculadas");
+  return stats;
 }
