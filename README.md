@@ -1,398 +1,483 @@
-# 🤖 CRM Automation Platform
+# CRM Automation Platform
 
-Plataforma de automação de atendimento com classificação de intenção por IA, integração com n8n, Supabase e Google Sheets.
+Plataforma de automacao de atendimento com classificacao de intencao por IA, persistencia no Supabase e orquestracao com n8n.
 
 ---
 
-## 📐 Arquitetura
+## Arquitetura
 
-```
-Webhook (n8n) 
-    │
-    ▼
-Validação & Normalização (n8n Code Node)
-    │
-    ▼
-POST /leads (Backend Node.js/TypeScript)
-    │
-    ├──► Classificação de Intenção (OpenAI / Claude / Fallback)
-    │
-    ▼
+```text
+Webhook (n8n)
+   |
+   v
+POST /leads (Fastify + TypeScript)
+   |
+   +--> JWT obrigatorio
+   +--> Rate limit
+   +--> Classificacao de intencao (OpenAI -> Anthropic -> keywords)
+   |
+   v
 Supabase (PostgreSQL)
-    │
-    ▼
-Roteamento por Intenção (n8n IF Node)
-    │
-    ├── VENDAS  ──► Google Sheets (aba Vendas)
-    ├── SUPORTE ──► Google Sheets (aba Suporte)
-    └── OUTROS  ──► Google Sheets (aba Outros)
+   |
+   v
+n8n decide o roteamento por intencao
+   +--> VENDAS
+   +--> SUPORTE
+   +--> OUTROS
 ```
 
 ---
 
-## 🗂 Estrutura de Pastas
+## Estrutura
 
-```
+```text
 crm-automation/
-├── docker-compose.yml          # Orquestração dos containers
-├── .env.example                # Template de variáveis de ambiente
-│
-├── backend/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── src/
-│       ├── server.ts           # Entrypoint + graceful shutdown
-│       ├── app.ts              # Setup Fastify + plugins + rotas
-│       ├── types/
-│       │   └── index.ts        # Interfaces e tipos centrais
-│       ├── config/
-│       │   ├── env.ts          # Validação de variáveis (Zod)
-│       │   ├── logger.ts       # Logger Pino
-│       │   └── supabase.ts     # Client Supabase (singleton)
-│       ├── controllers/
-│       │   └── lead.controller.ts   # Validação HTTP + resposta
-│       ├── services/
-│       │   ├── lead.service.ts      # Lógica de negócio + Supabase
-│       │   └── ai.service.ts        # Classificação por IA
-│       ├── routes/
-│       │   └── lead.routes.ts       # Registro das rotas
-│       └── middlewares/
-│           └── error.handler.ts     # Tratamento global de erros
-│
-├── n8n/
-│   └── workflow-lead-intake.json   # Workflow exportado (import no n8n)
-│
-└── docs/
-    └── supabase-schema.sql         # SQL para criar a tabela no Supabase
+|-- docker-compose.yml
+|-- .env.example
+|-- README.md
+|-- backend/
+|   |-- Dockerfile
+|   |-- package.json
+|   |-- tsconfig.json
+|   `-- src/
+|       |-- server.ts
+|       |-- app.bootstrap.ts
+|       |-- config/
+|       |   |-- env.ts
+|       |   |-- logger.ts
+|       |   `-- supabase.ts
+|       |-- controllers/
+|       |   |-- auth.controller.ts
+|       |   `-- lead.controller.ts
+|       |-- middlewares/
+|       |   |-- auth.middleware.ts
+|       |   `-- error.handler.ts
+|       |-- routes/
+|       |   |-- auth.routes.ts
+|       |   |-- lead.routes.ts
+|       |   `-- lead-secure.routes.ts
+|       |-- services/
+|       |   |-- ai.service.ts
+|       |   |-- ai-fallback.service.ts
+|       |   |-- auth.service.ts
+|       |   `-- lead.service.ts
+|       `-- types/
+|           |-- fastify.d.ts
+|           `-- index.ts
+|-- n8n/
+|   `-- workflow-lead-intake.json
+`-- docs/
+    `-- supabase-schema.sql
 ```
 
 ---
 
-## 🚀 Como Rodar
+## Como rodar
 
-### Pré-requisitos
+### Pre-requisitos
 
-- Docker e Docker Compose instalados
-- Conta no [Supabase](https://supabase.com) (gratuita)
-- Chave de API: OpenAI **ou** Anthropic (opcional — há fallback por keywords)
+- Docker e Docker Compose
+- Conta no Supabase
+- Chave da OpenAI ou Anthropic opcional
 
----
-
-### 1. Clone e configure o ambiente
+### 1. Clonar o projeto
 
 ```bash
 git clone https://github.com/mrlptrcc/n8ncrm.git
 cd crm-automation
-
-# Cria seu .env a partir do template
 cp .env.example .env
 ```
 
-Edite o `.env` com seus dados reais:
+### 2. Configurar o `.env`
+
+Exemplo minimo:
 
 ```env
 SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
 SUPABASE_KEY=your-service-role-key
+API_KEY=sua-chave-interna
+JWT_SECRET=uma-chave-longa-e-segura-com-16-ou-mais-caracteres
 AI_PROVIDER=openai
 OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=
+PORT=3000
+LOG_LEVEL=info
 ```
 
----
-
-### 2. Configure o Supabase
-
-1. Acesse [app.supabase.com](https://app.supabase.com) e crie um projeto
-2. Vá em **SQL Editor** → **New Query**
-3. Cole e execute o conteúdo de `docs/supabase-schema.sql`
-4. Copie a **URL** e a **service_role key** de **Settings → API** para o seu `.env`
-
-> ⚠️ Use `service_role` key no backend (não a `anon` key) para contornar o RLS.
-
----
-
-### 3. Suba os containers
+### 3. Subir os containers
 
 ```bash
-# Primeira vez (build + start)
 docker compose up --build -d
-
-# Verificar status
 docker compose ps
-
-# Acompanhar logs em tempo real
-docker compose logs -f
-
-# Logs de um serviço específico
 docker compose logs -f backend
 docker compose logs -f n8n
 ```
 
----
+### 4. Configurar o Supabase
 
-### 4. Configure o n8n
+1. Crie um projeto no Supabase.
+2. Execute o SQL em `docs/supabase-schema.sql`.
+3. Copie `SUPABASE_URL` e `service_role key` para o `.env`.
+
+### 5. Configurar o n8n
 
 1. Acesse `http://localhost:5678`
-2. Login: `admin` / `admin123` (ou o que configurou no `.env`)
-3. Vá em **Workflows → Import from File**
-4. Importe `n8n/workflow-lead-intake.json`
-5. Configure a credencial do Google Sheets:
-   - Menu lateral → **Credentials → New → Google Sheets OAuth2**
-   - Siga o fluxo de autorização
-6. Substitua `YOUR_GOOGLE_SHEET_ID_*` nos nodes pelo ID real das suas planilhas
-7. Ative o workflow com o toggle no canto superior direito
-
-> O ID da planilha está na URL: `https://docs.google.com/spreadsheets/d/**ID_AQUI**/edit`
+2. Importe `n8n/workflow-lead-intake.json`
+3. Configure as credenciais do Google Sheets
+4. Ative o workflow
 
 ---
 
-## 📡 Endpoints da API
+## Endpoints
 
-### `POST /leads` — Criar lead
+### Publicos
+
+#### `GET /health`
 
 ```bash
-curl -X POST http://localhost:3000/leads \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "João Silva",
-    "message": "Gostaria de saber o preço do plano Pro"
-  }'
+curl http://localhost:3000/health
 ```
 
-**Resposta (201):**
+Resposta:
+
 ```json
 {
   "success": true,
   "data": {
-    "id": "3f7a8b2c-1234-5678-abcd-ef0123456789",
-    "name": "João Silva",
-    "message": "Gostaria de saber o preço do plano Pro",
-    "intent": "VENDAS",
-    "created_at": "2025-01-15T14:30:00.000Z"
+    "status": "ok",
+    "timestamp": "2026-04-23T12:00:00.000Z",
+    "env": "production"
   }
 }
 ```
 
----
+#### `POST /auth/token`
 
-### `GET /leads` — Listar leads
-
-```bash
-# Todos os leads (paginado)
-curl http://localhost:3000/leads
-
-# Filtrar por intenção
-curl "http://localhost:3000/leads?intent=VENDAS"
-
-# Busca por texto
-curl "http://localhost:3000/leads?search=João"
-
-# Paginação
-curl "http://localhost:3000/leads?page=2&limit=10"
-```
-
-**Resposta (200):**
-```json
-{
-  "success": true,
-  "data": [...],
-  "meta": {
-    "total": 42,
-    "page": 1,
-    "limit": 20
-  }
-}
-```
-
----
-
-### `GET /leads/:id` — Buscar por ID
+Gera um JWT valido por 24 horas.
 
 ```bash
-curl http://localhost:3000/leads/3f7a8b2c-1234-5678-abcd-ef0123456789
-```
-
----
-
-### `GET /health` — Health Check
-
-```bash
-curl http://localhost:3000/health
-# {"status":"ok","timestamp":"...","env":"production"}
-```
-
----
-
-## 🧠 Classificação por IA
-
-A função `classifyIntent()` em `src/services/ai.service.ts` recebe a mensagem e retorna:
-
-```typescript
-{
-  intent: "VENDAS" | "SUPORTE" | "OUTROS",
-  confidence: "high" | "medium" | "low",
-  reasoning: "breve explicação"
-}
-```
-
-### Lógica de seleção do provider:
-
-```
-AI_PROVIDER=anthropic + ANTHROPIC_API_KEY presente → usa Claude Haiku
-AI_PROVIDER=openai   + OPENAI_API_KEY presente    → usa GPT-4o Mini
-Nenhuma chave configurada                          → fallback por keywords (sem custo)
-Erro na API de IA                                  → fallback automático por keywords
-```
-
-### Exemplos de classificação:
-
-| Mensagem | Intenção | Confidence |
-|----------|----------|------------|
-| "Quero contratar o plano anual, qual o preço?" | VENDAS | high |
-| "O sistema travou e não consigo acessar" | SUPORTE | high |
-| "Qual o horário de funcionamento?" | OUTROS | medium |
-| "Podem me ajudar com minha conta?" | SUPORTE | medium |
-
----
-
-## 🔄 Fluxo do Workflow n8n
-
-```
-1. Webhook POST /webhook/lead-intake
-       ↓
-2. Code Node: valida campos obrigatórios (name, message)
-       ↓
-3. HTTP Request: POST http://backend:3000/leads
-   → Backend chama IA → salva no Supabase → retorna lead com intent
-       ↓
-4. IF Node "É VENDAS?": checa se intent === "VENDAS"
-   ├── TRUE  → Google Sheets (aba Vendas)
-   └── FALSE → IF Node "É SUPORTE?"
-                ├── TRUE  → Google Sheets (aba Suporte)
-                └── FALSE → Google Sheets (aba Outros)
-       ↓
-5. Respond to Webhook: retorna JSON com lead processado
-```
-
----
-
-## 🐋 Comandos Docker úteis
-
-```bash
-# Subir tudo em background
-docker compose up -d
-
-# Subir com rebuild forçado (após mudanças no código)
-docker compose up --build -d
-
-# Parar todos os containers
-docker compose down
-
-# Parar e remover volumes (reseta n8n)
-docker compose down -v
-
-# Ver logs em tempo real
-docker compose logs -f
-
-# Entrar no container do backend
-docker compose exec backend sh
-
-# Restart de um serviço específico
-docker compose restart backend
-
-# Verificar uso de recursos
-docker stats
-```
-
----
-
-## 📊 Google Sheets — Configuração
-
-### Estrutura esperada nas planilhas
-
-Crie uma planilha com 3 abas: **Vendas**, **Suporte**, **Outros**
-
-Cada aba deve ter os seguintes cabeçalhos na linha 1:
-
-| ID | Nome | Mensagem | Intenção | Data |
-|----|------|----------|----------|------|
-
-O n8n preencherá automaticamente cada linha conforme os leads chegam.
-
-### Como obter credenciais do Google Sheets
-
-1. Acesse [Google Cloud Console](https://console.cloud.google.com)
-2. Crie um projeto → Ative a **Google Sheets API**
-3. Crie credenciais OAuth 2.0 (tipo: "Web application")
-4. Configure o redirect URI: `http://localhost:5678/rest/oauth2-credential/callback`
-5. No n8n: **Credentials → Google Sheets OAuth2** → cole Client ID e Secret → autorize
-
----
-
-## ⚙️ Variáveis de Ambiente
-
-| Variável | Obrigatória | Descrição |
-|----------|-------------|-----------|
-| `SUPABASE_URL` | ✅ | URL do projeto Supabase |
-| `SUPABASE_KEY` | ✅ | service_role key do Supabase |
-| `AI_PROVIDER` | ❌ | `openai` (padrão) ou `anthropic` |
-| `OPENAI_API_KEY` | ❌ | Chave da OpenAI (se AI_PROVIDER=openai) |
-| `ANTHROPIC_API_KEY` | ❌ | Chave Anthropic (se AI_PROVIDER=anthropic) |
-| `PORT` | ❌ | Porta do backend (padrão: 3000) |
-| `LOG_LEVEL` | ❌ | `debug`, `info`, `warn`, `error` |
-| `N8N_USER` | ❌ | Usuário do n8n (padrão: admin) |
-| `N8N_PASSWORD` | ❌ | Senha do n8n (padrão: admin123) |
-
----
-
-## 🛡️ Boas Práticas Implementadas
-
-- **Validação de entrada** com Zod (schema-first, erros descritivos)
-- **Separação de responsabilidades**: controller → service → config
-- **Graceful shutdown** no SIGTERM/SIGINT
-- **Logger estruturado** (pino) com níveis e contexto
-- **Fallback de IA** garante funcionamento mesmo sem chaves configuradas
-- **Singleton** no cliente Supabase (evita múltiplas conexões)
-- **Multi-stage Docker build** (imagem de produção enxuta)
-- **Usuário não-root** no container por segurança
-- **RLS habilitado** no Supabase por padrão
-- **Health check** para monitoramento e orchestration
-
----
-
-## 🧪 Testando o Webhook do n8n
-
-Com o workflow ativo, envie um POST diretamente para o n8n:
-
-```bash
-curl -X POST http://localhost:5678/webhook/lead-intake \
+curl -X POST http://localhost:3000/auth/token \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Teste Webhook",
-    "message": "Preciso de suporte urgente com minha conta"
+    "apiKey": "sua-chave-interna"
   }'
 ```
 
-O n8n irá processar, chamar o backend, classificar a intenção com IA e inserir na planilha correta.
+Resposta:
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": "24h"
+  }
+}
+```
+
+### Protegidos por JWT
+
+Todas as rotas abaixo exigem:
+
+```bash
+-H "Authorization: Bearer SEU_TOKEN_AQUI"
+```
+
+#### `POST /leads`
+
+```bash
+curl -X POST http://localhost:3000/leads \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI" \
+  -d '{
+    "name": "Joao Silva",
+    "message": "Gostaria de saber o preco do plano Pro"
+  }'
+```
+
+#### `GET /leads`
+
+```bash
+curl http://localhost:3000/leads \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+```
+
+Filtros:
+
+```bash
+curl "http://localhost:3000/leads?intent=VENDAS" \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+
+curl "http://localhost:3000/leads?search=Joao" \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+
+curl "http://localhost:3000/leads?page=2&limit=10" \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+```
+
+#### `GET /leads/:id`
+
+```bash
+curl http://localhost:3000/leads/3f7a8b2c-1234-5678-abcd-ef0123456789 \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+```
+
+#### `GET /leads/stats`
+
+```bash
+curl http://localhost:3000/leads/stats \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+```
+
+Resposta:
+
+```json
+{
+  "success": true,
+  "data": {
+    "total": 120,
+    "by_intent": {
+      "VENDAS": 50,
+      "SUPORTE": 45,
+      "OUTROS": 25
+    },
+    "last_7_days": 18,
+    "last_30_days": 72
+  }
+}
+```
 
 ---
 
-## 📦 Tecnologias
+## Fluxo de autenticacao JWT
+
+1. O cliente envia `POST /auth/token` com `{ "apiKey": "..." }`.
+2. O backend compara esse valor com `API_KEY` do ambiente.
+3. Se bater, o Fastify assina um JWT com `JWT_SECRET`.
+4. O token volta para o cliente com expiracao de `24h`.
+5. Nas rotas `/leads`, o middleware chama `request.jwtVerify()`.
+6. Se o token for valido, a request segue.
+7. Se faltar token ou ele for invalido, a API responde `401`.
+
+Exemplo de erro:
+
+```json
+{
+  "success": false,
+  "error": "Token invalido ou ausente"
+}
+```
+
+### Como o JWT funciona no Fastify neste projeto
+
+- O plugin `@fastify/jwt` e registrado em `backend/src/app.bootstrap.ts`.
+- O segredo usado para assinar e validar tokens vem de `JWT_SECRET`.
+- O endpoint `POST /auth/token` emite o token.
+- O middleware `backend/src/middlewares/auth.middleware.ts` protege todas as rotas `/leads`.
+
+---
+
+## Rate limit
+
+Limites atuais:
+
+- Global: `60 requisicoes por minuto por IP`
+- `POST /leads`: `10 requisicoes por minuto por IP`
+
+### Como o rate limit funciona no Fastify neste projeto
+
+- O plugin `@fastify/rate-limit` e registrado globalmente em `backend/src/app.bootstrap.ts`.
+- Esse plugin aplica o limite base para todas as rotas.
+- No `POST /leads`, existe uma configuracao por rota sobrescrevendo o limite para `10/min`.
+- O controle e feito por IP.
+- Quando o limite e atingido, a resposta segue o padrao `ApiResponse`.
+
+Resposta esperada:
+
+```json
+{
+  "success": false,
+  "error": "Limite de requisicoes excedido. Tente novamente em instantes."
+}
+```
+
+### Como testar o rate limit
+
+Teste do limite especifico do `POST /leads`:
+
+```bash
+for i in $(seq 1 12); do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    -X POST http://localhost:3000/leads \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer SEU_TOKEN_AQUI" \
+    -d "{\"name\":\"Teste $i\",\"message\":\"Quero saber o preco do plano\"}"
+done
+```
+
+Esperado:
+
+- Requisicoes `1` a `10`: `201`
+- Requisicoes `11` e `12`: `429`
+
+Se voce estiver no PowerShell e quiser algo nativo:
+
+```powershell
+1..12 | ForEach-Object {
+  $body = @{
+    name = "Teste $_"
+    message = "Quero saber o preco do plano"
+  } | ConvertTo-Json
+
+  try {
+    $response = Invoke-WebRequest `
+      -Uri "http://localhost:3000/leads" `
+      -Method POST `
+      -Headers @{
+        Authorization = "Bearer SEU_TOKEN_AQUI"
+      } `
+      -ContentType "application/json" `
+      -Body $body
+
+    Write-Output $response.StatusCode
+  } catch {
+    Write-Output $_.Exception.Response.StatusCode.value__
+  }
+}
+```
+
+---
+
+## Estatisticas
+
+O endpoint `GET /leads/stats` retorna:
+
+```json
+{
+  "total": 120,
+  "by_intent": {
+    "VENDAS": 50,
+    "SUPORTE": 45,
+    "OUTROS": 25
+  },
+  "last_7_days": 18,
+  "last_30_days": 72
+}
+```
+
+Significado:
+
+- `total`: total geral de leads
+- `by_intent`: total por intencao
+- `last_7_days`: quantidade criada nos ultimos 7 dias
+- `last_30_days`: quantidade criada nos ultimos 30 dias
+
+Implementacao:
+
+- A consulta e feita no `backend/src/services/lead.service.ts`
+- Os dados sao buscados direto do Supabase com contagens agregadas
+
+---
+
+## Classificacao por IA
+
+O backend hoje usa a funcao `classifyIntent()` em `backend/src/services/ai-fallback.service.ts`.
+
+Fluxo:
+
+1. Tenta o provider configurado em `AI_PROVIDER`
+2. Se falhar, tenta o provider alternativo uma unica vez
+3. Se os dois falharem, usa fallback por palavras-chave
+
+Ordem:
+
+```text
+AI_PROVIDER=openai     -> OpenAI -> Anthropic -> keywords
+AI_PROVIDER=anthropic  -> Anthropic -> OpenAI -> keywords
+```
+
+Os logs indicam qual provider teve sucesso.
+
+---
+
+## Variaveis de ambiente
+
+| Variavel | Obrigatoria | Descricao |
+|---|---|---|
+| `SUPABASE_URL` | sim | URL do projeto Supabase |
+| `SUPABASE_KEY` | sim | service_role key do Supabase |
+| `API_KEY` | sim | chave usada para gerar JWT em `POST /auth/token` |
+| `JWT_SECRET` | sim | segredo para assinar e validar o JWT |
+| `AI_PROVIDER` | nao | `openai` ou `anthropic` |
+| `OPENAI_API_KEY` | nao | chave da OpenAI |
+| `ANTHROPIC_API_KEY` | nao | chave da Anthropic |
+| `PORT` | nao | porta do backend, padrao `3000` |
+| `LOG_LEVEL` | nao | nivel de log |
+| `N8N_USER` | nao | usuario do n8n |
+| `N8N_PASSWORD` | nao | senha do n8n |
+
+---
+
+## Testes manuais recomendados
+
+### 1. Health check
+
+```bash
+curl http://localhost:3000/health
+```
+
+### 2. Gerar token
+
+```bash
+curl -X POST http://localhost:3000/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"apiKey":"sua-chave-interna"}'
+```
+
+### 3. Criar lead autenticado
+
+```bash
+curl -X POST http://localhost:3000/leads \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI" \
+  -d '{"name":"Maria","message":"Preciso de suporte urgente"}'
+```
+
+### 4. Validar bloqueio sem token
+
+```bash
+curl http://localhost:3000/leads
+```
+
+### 5. Validar estatisticas
+
+```bash
+curl http://localhost:3000/leads/stats \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"
+```
+
+### 6. Validar rate limit
+
+Use um dos loops mostrados na secao de rate limit.
+
+---
+
+## Tecnologias
 
 | Camada | Tecnologia |
-|--------|-----------|
+|---|---|
 | Runtime | Node.js 20 |
 | Linguagem | TypeScript 5 |
 | Framework HTTP | Fastify 4 |
-| Banco de Dados | Supabase (PostgreSQL) |
-| IA | OpenAI GPT-4o Mini / Claude Haiku |
-| Automação | n8n (self-hosted) |
+| Banco | Supabase / PostgreSQL |
+| IA | OpenAI e Anthropic |
+| Automacao | n8n |
 | Logs | Pino |
-| Validação | Zod |
+| Validacao | Zod |
 | Containers | Docker + Docker Compose |
 
 ---
 
-## 📄 Licença
+## Licenca
 
-MIT — use à vontade para portfólio, projetos e aprendizado.
+MIT
