@@ -12,18 +12,24 @@
       "name": "Webhook - Recebe Lead",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "lead-intake-webhook"
     },
     {
       "parameters": {
-        "jsCode": "// Validação básica dos dados recebidos\nconst body = $input.first().json.body || $input.first().json;\n\nif (!body.name || !body.message) {\n  throw new Error('Campos obrigatórios ausentes: name e message');\n}\n\nreturn [{\n  json: {\n    name: String(body.name).trim(),\n    message: String(body.message).trim(),\n    timestamp: new Date().toISOString(),\n    source: body.source || 'webhook'\n  }\n}];"
+        "jsCode": "// Valida??o b?sica dos dados recebidos\nconst input = $input.first().json;\nconst body = input.body || input;\nconst authorization = input.headers?.authorization || input.headers?.Authorization;\n\nif (!body.name || !body.message) {\n  throw new Error('Campos obrigat?rios ausentes: name e message');\n}\n\nreturn [{\n  json: {\n    name: String(body.name).trim(),\n    message: String(body.message).trim(),\n    timestamp: new Date().toISOString(),\n    source: body.source || 'webhook',\n    authorization: authorization || ''\n  }\n}];"
       },
       "id": "validate-node",
       "name": "Valida e Normaliza Dados",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -35,6 +41,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json.authorization }}"
             }
           ]
         },
@@ -59,7 +69,10 @@
       "name": "Envia para Backend (API)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -86,7 +99,10 @@
       "name": "É VENDAS?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -107,7 +123,10 @@
       "name": "É SUPORTE?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [900, 480]
+      "position": [
+        900,
+        480
+      ]
     },
     {
       "parameters": {
@@ -137,7 +156,10 @@
       "name": "Google Sheets — Aba Vendas",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [1120, 220]
+      "position": [
+        1120,
+        220
+      ]
     },
     {
       "parameters": {
@@ -167,7 +189,10 @@
       "name": "Google Sheets — Aba Suporte",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [1120, 440]
+      "position": [
+        1120,
+        440
+      ]
     },
     {
       "parameters": {
@@ -197,7 +222,10 @@
       "name": "Google Sheets — Aba Outros",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [1120, 660]
+      "position": [
+        1120,
+        660
+      ]
     },
     {
       "parameters": {
@@ -208,7 +236,10 @@
       "name": "Responde ao Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     }
   ],
   "connections": {
@@ -287,13 +318,37 @@
       ]
     },
     "Google Sheets — Aba Vendas": {
-      "main": [[{ "node": "Responde ao Webhook", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Responde ao Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Google Sheets — Aba Suporte": {
-      "main": [[{ "node": "Responde ao Webhook", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Responde ao Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Google Sheets — Aba Outros": {
-      "main": [[{ "node": "Responde ao Webhook", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Responde ao Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -303,7 +358,11 @@
     "errorWorkflow": ""
   },
   "staticData": null,
-  "tags": ["crm", "automação", "lead"],
+  "tags": [
+    "crm",
+    "automação",
+    "lead"
+  ],
   "pinData": {},
   "versionId": "1.0.0",
   "triggerCount": 1
